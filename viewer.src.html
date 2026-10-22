@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HLP Viewer</title>
+<style>
+:root{
+  --bg:#f4f5f7; --panel:#ffffff; --line:#d9dce1; --text:#1d2129; --muted:#6b7280; --accent:#2563eb; --accent-weak:#e8efff; --sel:#dbe6ff;
+  --basefont:"Meiryo UI","Meiryo","Yu Gothic UI","Hiragino Sans","Noto Sans JP",sans-serif;
+  --monofont:"MS Gothic","Osaka-Mono","Noto Sans Mono CJK JP",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#17191d; --panel:#1f2227; --line:#33373e; --text:#e6e8eb; --muted:#9aa1ab; --accent:#6ea0ff; --accent-weak:#24324d; --sel:#2b3b5c; }
+}
+:root[data-theme="dark"]{ --bg:#17191d; --panel:#1f2227; --line:#33373e; --text:#e6e8eb; --muted:#9aa1ab; --accent:#6ea0ff; --accent-weak:#24324d; --sel:#2b3b5c; }
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:13px/1.5 var(--basefont);display:flex;flex-direction:column;overflow:hidden}
+header{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:14px;margin:0 10px 0 0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40vw}
+button,.btn{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer;white-space:nowrap}
+button:hover:not(:disabled),.btn:hover{border-color:var(--accent);color:var(--accent)}
+button:disabled{opacity:.4;cursor:default}
+.sp{flex:1}
+main{flex:1;display:flex;min-height:0}
+aside{width:300px;min-width:180px;max-width:60vw;display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--line);resize:horizontal;overflow:hidden}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;border:0;border-radius:0;background:transparent;padding:8px 4px;border-bottom:2px solid transparent}
+.tabs button.on{border-bottom-color:var(--accent);color:var(--accent);font-weight:600}
+.pane{flex:1;overflow:auto;display:none;padding:6px 0}
+.pane.on{display:block}
+.search{padding:6px 8px;position:sticky;top:0;background:var(--panel)}
+.search input{width:100%;font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+ul.tree,ul.list{list-style:none;margin:0;padding:0}
+ul.tree ul{list-style:none;margin:0;padding-left:14px}
+.item{display:block;padding:3px 10px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:4px;margin:0 4px}
+.item:hover{background:var(--accent-weak)}
+.item.cur{background:var(--sel);font-weight:600}
+.book>.item::before{content:"\25B8";display:inline-block;width:1em;color:var(--muted);transition:transform .12s}
+.book.open>.item::before{transform:rotate(90deg)}
+.book>ul{display:none}.book.open>ul{display:block}
+.leaf>.item::before{content:"\2022";display:inline-block;width:1em;color:var(--muted)}
+.hit small{color:var(--muted);display:block;white-space:normal}
+#frameWrap{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
+iframe{flex:1;border:0;width:100%;background:#fff}
+#drop{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--muted);text-align:center;padding:24px;background:var(--bg)}
+#drop .box{border:2px dashed var(--line);border-radius:14px;padding:40px 48px;max-width:560px}
+#drop b{color:var(--text);font-size:16px}
+body.dragging #drop{display:flex!important}
+body.dragging #drop .box{border-color:var(--accent);color:var(--accent)}
+.status{padding:3px 10px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);background:var(--panel);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+input[type=file]{display:none}
+@media (max-width:700px){ main{flex-direction:column} aside{width:auto;max-width:none;height:40vh;resize:vertical;border-right:0;border-bottom:1px solid var(--line)} header h1{max-width:60vw} }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">HLP Viewer</h1>
+  <button id="bOpen" title="HLP（と CNT）ファイルを開く">開く…</button>
+  <button id="bBack" disabled title="戻る (Alt+←)">◀ 戻る</button>
+  <button id="bFwd" disabled title="進む (Alt+→)">進む ▶</button>
+  <button id="bPrev" disabled title="前のトピック (&lt;&lt;)">&lt;&lt;</button>
+  <button id="bNext" disabled title="次のトピック (&gt;&gt;)">&gt;&gt;</button>
+  <button id="bContents" disabled title="目次トピック">目次</button>
+  <span class="sp"></span>
+  <button id="bZoomOut" title="縮小">A−</button>
+  <button id="bZoomIn" title="拡大">A＋</button>
+  <button id="bTheme" title="ライト／ダーク切替">テーマ</button>
+  <button id="bSave" disabled title="読み込んだヘルプを埋め込んだ単体HTMLとして保存">単体HTML保存</button>
+  <input type="file" id="file" accept=".hlp,.cnt,.HLP,.CNT" multiple>
+</header>
+<main>
+  <aside>
+    <div class="tabs"><button data-p="pToc" class="on">目次</button><button data-p="pIdx">キーワード</button><button data-p="pFind">全文検索</button></div>
+    <div class="pane on" id="pToc"><ul class="tree" id="toc"></ul></div>
+    <div class="pane" id="pIdx"><div class="search"><input id="qIdx" placeholder="キーワードを入力"></div><ul class="list" id="idx"></ul></div>
+    <div class="pane" id="pFind"><div class="search"><input id="qFind" placeholder="本文を検索（Enter）"></div><ul class="list" id="find"></ul></div>
+  </aside>
+  <div id="frameWrap">
+    <iframe id="frame" title="ヘルプ内容"></iframe>
+    <div id="drop"><div class="box"><b>.hlp ファイルをここにドロップ</b><br><br>同名の .cnt（目次ファイル）も一緒にドロップすると、<br>WinHelp と同じ目次ツリーを表示します。<br><br><button id="bOpen2">ファイルを選択…</button></div></div>
+  </div>
+</main>
+<div class="status" id="status">WinHelp (.hlp) ビューア — ファイルはブラウザ内だけで処理され、外部に送信されません。</div>
+<!--EMBED-->
+<script>
+/*HLPJS*/
+</script>
+<script>
+"use strict";
+const PRISTINE='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
+const $=id=>document.getElementById(id);
+const frame=$('frame');
+let hf=null, cnt=null, cur=null, hist=[], hpos=-1, zoom=1, hlpBytes=null, cntBytes=null, hlpName='', cntName='';
+try{ zoom=+localStorage.getItem('hlpv.zoom')||1; const th=localStorage.getItem('hlpv.theme'); if(th) document.documentElement.dataset.theme=th; }catch(e){}
+
+function status(s){ $('status').textContent=s; }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ---------- loading ----------
+async function loadFiles(list){
+  let h=null,c=null;
+  for(const f of list){ const n=f.name.toLowerCase(); if(n.endsWith('.hlp')) h=f; else if(n.endsWith('.cnt')) c=f; }
+  if(!h && !c){ status('.hlp ファイルを指定してください'); return; }
+  if(h){ hlpBytes=new Uint8Array(await h.arrayBuffer()); hlpName=h.name; cntBytes=null; cntName=''; }
+  if(c){ cntBytes=new Uint8Array(await c.arrayBuffer()); cntName=c.name; }
+  if(!hlpBytes){ status('.cnt だけでは表示できません。.hlp も指定してください'); return; }
+  open(hlpBytes, cntBytes);
+}
+function open(hb, cb){
+  try{ hf=new HLP.HelpFile(hb); }catch(e){ status('読み込み失敗: '+e.message); alertBox('読み込みに失敗しました', e.message); return; }
+  cnt = cb ? HLP.parseCnt(cb) : null;
+  hist=[]; hpos=-1;
+  $('title').textContent = hf.title || (cnt&&cnt.title) || hlpName || 'ヘルプ';
+  document.title = $('title').textContent+' — HLP Viewer';
+  $('drop').style.display='none';
+  ['bContents','bSave'].forEach(i=>$(i).disabled=false);
+  buildToc(); buildIdx(''); $('find').innerHTML='';
+  status(`${hlpName||'埋め込みヘルプ'}  ·  WinHelp ${hf.minor>16?'4.x/3.1':'3.0'} 形式  ·  トピック ${hf.topics.filter(t=>t.title).length} 件  ·  キーワード ${hf.keywords.length} 件${cnt?'  ·  目次ファイル使用':''}`);
+  if(!routeHash()) go(hf.contentsTopic());
+}
+function alertBox(t,m){ frame.srcdoc='<body style="font:14px sans-serif;padding:24px"><h3>'+esc(t)+'</h3><p>'+esc(m)+'</p></body>'; }
+
+// ---------- TOC ----------
+function buildToc(){
+  const root=$('toc'); root.innerHTML='';
+  if(cnt && cnt.items.length){
+    const stack=[{ul:root, lv:0}];
+    cnt.items.forEach((it,i)=>{
+      while(stack.length>1 && stack[stack.length-1].lv>=it.level) stack.pop();
+      const parent=stack[stack.length-1].ul;
+      const li=document.createElement('li');
+      const a=document.createElement('span'); a.className='item'; a.textContent=it.text; a.title=it.text;
+      li.appendChild(a); parent.appendChild(li);
+      if(!it.ctx){ li.className='book'+(it.level===1&&i<1?' open':''); const ul=document.createElement('ul'); li.appendChild(ul); stack.push({ul, lv:it.level});
+        a.onclick=()=>li.classList.toggle('open'); }
+      else { li.className='leaf'; const t=it.file? null : hf.topicByContext(it.ctx);
+        if(t){ a.dataset.t=t.index; a.onclick=()=>go(t); } else { a.style.opacity=.5; a.title=it.text+'（別ファイル / 見つかりません）'; } }
+    });
+  } else {
+    hf.topics.forEach(t=>{ if(!t.title) return; const li=document.createElement('li'); li.className='leaf';
+      const a=document.createElement('span'); a.className='item'; a.textContent=t.title; a.title=t.title; a.dataset.t=t.index; a.onclick=()=>go(t); li.appendChild(a); root.appendChild(li); });
+  }
+}
+function markToc(t){
+  document.querySelectorAll('#toc .item.cur').forEach(e=>e.classList.remove('cur'));
+  const e=document.querySelector('#toc .item[data-t="'+t.index+'"]');
+  if(e){ e.classList.add('cur'); let p=e.parentElement; while(p && p.id!=='toc'){ if(p.classList.contains('book')) p.classList.add('open'); p=p.parentElement; } e.scrollIntoView({block:'nearest'}); }
+}
+// ---------- keyword index ----------
+function buildIdx(q){
+  const ul=$('idx'); ul.innerHTML=''; q=q.trim().toLowerCase();
+  const frag=document.createDocumentFragment(); let n=0;
+  for(const k of hf.keywords){
+    if(q && !k.key.toLowerCase().includes(q)) continue;
+    const li=document.createElement('li'); const a=document.createElement('span'); a.className='item'; a.textContent=k.key; a.title=k.key;
+    a.onclick=()=>{ const ts=[...new Set(k.offsets.map(o=>hf.topicByOffset(o)).filter(Boolean))];
+      if(ts.length===1) go(ts[0]); else chooser(k.key, ts); };
+    li.appendChild(a); frag.appendChild(li); if(++n>3000) break;
+  }
+  ul.appendChild(frag);
+}
+function chooser(key, ts){
+  const ul=$('find'); ul.innerHTML='';
+  showPane('pFind'); $('qFind').value='';
+  const h=document.createElement('li'); h.innerHTML='<div class="item" style="cursor:default;color:var(--muted)">「'+esc(key)+'」のトピック '+ts.length+' 件</div>'; ul.appendChild(h);
+  ts.forEach(t=>{ const li=document.createElement('li'); const a=document.createElement('span'); a.className='item'; a.textContent=t.title||'(無題)'; a.onclick=()=>go(t); li.appendChild(a); ul.appendChild(li); });
+}
+// ---------- full text ----------
+let textCache=null;
+function plain(t){ const d=document.createElement('div'); const r=hf.render(t); d.innerHTML=r.nonScroll+r.body; return d.textContent.replace(/\s+/g,' '); }
+function findText(q){
+  q=q.trim(); const ul=$('find'); ul.innerHTML=''; if(!q) return;
+  if(!textCache) textCache=hf.topics.map(t=>t.title? plain(t):'');
+  const ql=q.toLowerCase(); let n=0;
+  hf.topics.forEach((t,i)=>{ if(!t.title) return; const s=textCache[i]; const p=s.toLowerCase().indexOf(ql); const pt=t.title.toLowerCase().indexOf(ql);
+    if(p<0 && pt<0) return; n++;
+    const li=document.createElement('li'); li.className='hit'; const a=document.createElement('span'); a.className='item'; a.style.whiteSpace='normal';
+    const ctx = p>=0 ? s.slice(Math.max(0,p-20), p+q.length+40) : '';
+    a.innerHTML=esc(t.title)+(ctx?'<small>…'+esc(ctx)+'…</small>':''); a.onclick=()=>go(t,{highlight:q}); li.appendChild(a); ul.appendChild(li); });
+  if(!n) ul.innerHTML='<li><div class="item" style="color:var(--muted)">見つかりません</div></li>';
+}
+// ---------- topic display ----------
+function rgb(a,def){ return a? 'rgb('+a.join(',')+')' : def; }
+function frameDoc(t, opt){
+  const r=hf.render(t);
+  const win=(hf.windows.find(w=>/^main$/i.test(w.name))||hf.windows[0]||{});
+  const bgS=rgb(win.rgb,'#ffffff'), bgN=rgb(win.rgbNsr,'#ffffff');
+  const css=`
+  :root{--basefont:${getComputedStyle(document.documentElement).getPropertyValue('--basefont')};--monofont:${getComputedStyle(document.documentElement).getPropertyValue('--monofont')}}
+  html{font-size:${zoom*100}%}
+  body{margin:0;font-family:var(--basefont);color:#000;background:${bgS};zoom:${zoom}}
+  #ns{background:${bgN};padding:6px 14px 4px;border-bottom:1px solid #8888;position:sticky;top:0;z-index:2}
+  #sc{padding:6px 14px 40px}
+  p{margin:0;white-space:pre-wrap;tab-size:48px;line-height:1.45;word-break:break-word}
+  span[style*="'System'"]{font-family:var(--basefont)!important}
+  span[style*="'FixedSys'"],span[style*="'Courier New'"],span[style*="'Terminal'"]{font-family:var(--monofont)!important}
+  a{cursor:pointer;text-decoration:none}
+  a.jump{color:#008000;text-decoration:underline}
+  a.popup{color:#008000;text-decoration:underline dotted;text-underline-offset:3px}
+  a.jump span,a.popup span{color:inherit!important}
+  a.macro{color:#008000;text-decoration:underline}
+  a:hover{background:#00800018}
+  table.hlptable{border-collapse:collapse;margin:2px 0}
+  table.hlptable td{vertical-align:top;padding:1px 8px 1px 0}
+  img.bml{float:left;margin:0 8px 4px 0} img.bmr{float:right;margin:0 0 4px 8px} img{max-width:100%;vertical-align:middle;image-rendering:pixelated}
+  .pic{color:#888;font-size:90%}
+  mark{background:#ffe066;scroll-margin-top:120px}
+  #pop{position:absolute;display:none;max-width:min(560px,90vw);background:#ffffe8;border:1px solid #888;box-shadow:2px 3px 10px #0004;padding:8px 12px;z-index:9;border-radius:2px}
+  #pop p{white-space:pre-wrap}
+  `;
+  const nsr = r.nonScroll ? '<div id="ns">'+r.nonScroll+'</div>' : '';
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'+css+'</style></head><body>'+nsr+'<div id="sc">'+r.body+'</div><div id="pop"></div></body></html>';
+}
+function go(t, opt){
+  if(!t) { status('トピックが見つかりません'); return; }
+  opt=opt||{};
+  if(!opt.nohist){ hist=hist.slice(0,hpos+1); hist.push(t.index); hpos=hist.length-1; }
+  cur=t;
+  frame.onload=()=>wireFrame(opt);
+  frame.srcdoc=frameDoc(t,opt);
+  $('bBack').disabled=hpos<=0; $('bFwd').disabled=hpos>=hist.length-1;
+  const prev=prevTopic(t), next=nextTopic(t);
+  $('bPrev').disabled=!prev; $('bNext').disabled=!next;
+  markToc(t);
+  try{ history.replaceState(null,'','#topic='+t.index); }catch(e){}
+}
+function prevTopic(t){ if(t.hdr && t.hdr.browseBck>=0 && t.hdr.browseBck!==undefined){ const x=hf.topicByOffset(t.hdr.browseBck); if(x && x!==t) return x; } return null; }
+function nextTopic(t){ if(t.hdr && t.hdr.browseFor>=0 && t.hdr.browseFor!==undefined){ const x=hf.topicByOffset(t.hdr.browseFor); if(x && x!==t) return x; } return null; }
+function topicAtPos(pos){ return hf.topics.find(x=>x.pos===pos) || null; }
+function resolveLink(a){
+  if(a.dataset.file) return {ext:a.dataset.file};
+  if(a.dataset.hash) return {t:hf.topicByHash(+a.dataset.hash)};
+  if(a.dataset.off) return {t:hf.topicByOffset(+a.dataset.off)};
+  return {};
+}
+function wireFrame(opt){
+  const d=frame.contentDocument; if(!d) return;
+  const pop=d.getElementById('pop');
+  d.addEventListener('click',ev=>{
+    const a=ev.target.closest('a');
+    if(!a){ if(!ev.target.closest('#pop')) pop.style.display='none'; return; }
+    ev.preventDefault();
+    if(a.classList.contains('macro')){ runMacro(a.dataset.macro, a, d, pop); return; }
+    const L=resolveLink(a);
+    if(L.ext){ status('別ヘルプファイルへのリンク: '+L.ext+'（このビューアでは同一ファイル内のみ対応）'); return; }
+    if(!L.t){ status('リンク先トピックが見つかりません'); return; }
+    if(a.classList.contains('popup')) showPopup(L.t, a, d, pop); else { pop.style.display='none'; go(L.t); }
+  });
+  d.addEventListener('keydown',keys);
+  if(opt && opt.highlight) highlight(d, opt.highlight);
+}
+function showPopup(t, a, d, pop){
+  const r=hf.render(t); pop.innerHTML=r.nonScroll+r.body;
+  pop.querySelectorAll('a').forEach(x=>x.addEventListener('click',ev=>{ ev.preventDefault(); ev.stopPropagation(); const L=resolveLink(x); if(L.t){ if(x.classList.contains('popup')) showPopup(L.t,x,d,pop); else { pop.style.display='none'; go(L.t);} } }));
+  pop.style.display='block';
+  const rc=a.getBoundingClientRect(), w=d.documentElement.clientWidth, sx=d.documentElement.scrollLeft||d.body.scrollLeft, sy=d.documentElement.scrollTop||d.body.scrollTop;
+  const z=zoom||1;
+  let x=rc.left/1+sx, y=rc.bottom+sy+4;
+  pop.style.left='0px'; pop.style.top='0px';
+  const pw=pop.offsetWidth*z;
+  if(x+pw>w*1) x=Math.max(4, w-pw-8);
+  const ph=pop.offsetHeight*z, vh=d.documentElement.clientHeight;
+  if(rc.bottom+4+ph>vh && rc.top-4-ph>0) y=rc.top+sy-4-ph;
+  pop.style.left=(x/z)+'px'; pop.style.top=(y/z)+'px';
+}
+function runMacro(m, a, d, pop){
+  const mm=m.match(/^\s*(\w+)\s*\((.*)\)\s*$/s); if(!mm){ status('マクロ: '+m); return; }
+  const name=mm[1].toLowerCase(); const args=(mm[2].match(/"[^"]*"|`[^']*'|[^,]+/g)||[]).map(s=>s.trim().replace(/^["`]|["']$/g,''));
+  if(name==='jumpid'||name==='ji'||name==='popupid'||name==='pi'){
+    const ctx=args[1]||args[0]; const t=hf.topicByContext(ctx); if(!t){ status('マクロのジャンプ先が見つかりません: '+ctx); return; }
+    if(name==='popupid'||name==='pi') showPopup(t,a,d,pop); else go(t); return; }
+  if(name==='jumpcontents'||name==='jc'||name==='contents'){ go(hf.contentsTopic()); return; }
+  if(name==='jumphash'||name==='jh'){ const t=hf.topicByHash(+args[1]); if(t) go(t); return; }
+  if(name==='jumpcontext'||name==='jc'){ const t=hf.topicByMapId(+args[1]); if(t) go(t); return; }
+  status('未対応のマクロ: '+m);
+}
+function highlight(d,q){
+  const w=d.createTreeWalker(d.getElementById('sc'),NodeFilter.SHOW_TEXT); const ql=q.toLowerCase(); let first=null; const nodes=[];
+  while(w.nextNode()) nodes.push(w.currentNode);
+  for(const n of nodes){ const i=n.data.toLowerCase().indexOf(ql); if(i<0) continue; const r=d.createRange(); r.setStart(n,i); r.setEnd(n,i+q.length); const m=d.createElement('mark'); r.surroundContents(m); if(!first) first=m; }
+  if(first) first.scrollIntoView({block:'center'});
+}
+function keys(e){
+  if(e.altKey && e.key==='ArrowLeft'){ back(); e.preventDefault(); }
+  else if(e.altKey && e.key==='ArrowRight'){ fwd(); e.preventDefault(); }
+}
+function back(){ if(hpos>0){ hpos--; go(hf.topics[hist[hpos]],{nohist:1}); } }
+function fwd(){ if(hpos<hist.length-1){ hpos++; go(hf.topics[hist[hpos]],{nohist:1}); } }
+// hash routing: #ctx=<id>  #c=<context string>  #k=<keyword>  #topic=<n>  #contents
+function routeHash(){
+  if(!hf) return false; const h=decodeURIComponent(location.hash.slice(1)); if(!h) return false;
+  const m=h.match(/^(\w+)(?:=(.*))?$/); if(!m) return false;
+  const k=m[1], v=m[2]||'';
+  if(k==='ctx'){ const id=parseInt(v); const t=hf.topicByMapId(id)||hf.topicByContext(v); if(t){ go(t); return true; } }
+  if(k==='c'){ const t=hf.topicByContext(v); if(t){ go(t); return true; } }
+  if(k==='topic'){ const t=hf.topics[+v]; if(t){ go(t); return true; } }
+  if(k==='contents'){ go(hf.contentsTopic()); showPane('pToc'); return true; }
+  if(k==='k'||k==='search'){ go(hf.contentsTopic()); showPane('pIdx'); $('qIdx').value=v; buildIdx(v); const kw=hf.keywords.find(x=>x.key.toLowerCase()===v.toLowerCase()); if(kw){ const ts=[...new Set(kw.offsets.map(o=>hf.topicByOffset(o)))]; if(ts.length===1) go(ts[0]); } return true; }
+  if(k==='index'){ go(hf.contentsTopic()); showPane('pIdx'); return true; }
+  return false;
+}
+function showPane(id){ document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.p===id)); document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id===id)); }
+// ---------- save standalone ----------
+function b64(u8){ let s=''; for(let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000)); return btoa(s); }
+function saveStandalone(){
+  let html=PRISTINE;
+  html=html.replace(/<script type="application\/x-hlp"[^>]*>[\s\S]*?<\/script>/g,'');
+  const emb='<script type="application/x-hlp" data-kind="hlp" data-name="'+esc(hlpName)+'">'+b64(hlpBytes)+'<\/script>'+(cntBytes?'<script type="application/x-hlp" data-kind="cnt" data-name="'+esc(cntName)+'">'+b64(cntBytes)+'<\/script>':'');
+  html=html.replace('<!--EMBED-->','<!--EMBED-->'+emb);
+  // reset dynamic DOM state is harmless: the page rebuilds itself at start-up
+  const blob=new Blob([html],{type:'text/html'}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=(hlpName||'help').replace(/\.hlp$/i,'')+'.help.html'; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+}
+function fromB64(s){ const bin=atob(s.replace(/\s+/g,'')); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u; }
+// ---------- UI wiring ----------
+$('bOpen').onclick=$('bOpen2').onclick=()=>$('file').click();
+$('file').onchange=e=>loadFiles([...e.target.files]);
+$('bBack').onclick=back; $('bFwd').onclick=fwd;
+$('bPrev').onclick=()=>go(prevTopic(cur)); $('bNext').onclick=()=>go(nextTopic(cur));
+$('bContents').onclick=()=>go(hf.contentsTopic());
+$('bSave').onclick=saveStandalone;
+$('bZoomIn').onclick=()=>{ zoom=Math.min(3,+(zoom+0.1).toFixed(2)); try{localStorage.setItem('hlpv.zoom',zoom);}catch(e){} if(cur) go(cur,{nohist:1}); };
+$('bZoomOut').onclick=()=>{ zoom=Math.max(0.5,+(zoom-0.1).toFixed(2)); try{localStorage.setItem('hlpv.zoom',zoom);}catch(e){} if(cur) go(cur,{nohist:1}); };
+$('bTheme').onclick=()=>{ const r=document.documentElement; const dark=r.dataset.theme? r.dataset.theme==='dark' : matchMedia('(prefers-color-scheme: dark)').matches; r.dataset.theme=dark?'light':'dark'; try{localStorage.setItem('hlpv.theme',r.dataset.theme);}catch(e){} };
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>showPane(b.dataset.p));
+$('qIdx').oninput=e=>buildIdx(e.target.value);
+$('qIdx').onkeydown=e=>{ if(e.key==='Enter'){ const f=document.querySelector('#idx .item'); if(f) f.click(); } };
+$('qFind').onkeydown=e=>{ if(e.key==='Enter') findText(e.target.value); };
+document.addEventListener('keydown',keys);
+window.addEventListener('hashchange',routeHash);
+['dragenter','dragover'].forEach(ev=>document.addEventListener(ev,e=>{ e.preventDefault(); document.body.classList.add('dragging'); }));
+['dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>{ e.preventDefault(); if(ev==='drop'||e.target===document.documentElement||!e.relatedTarget) document.body.classList.remove('dragging'); }));
+document.addEventListener('drop',e=>{ document.body.classList.remove('dragging'); if(e.dataTransfer.files.length) loadFiles([...e.dataTransfer.files]); });
+// embedded help (standalone mode / StirlingFix auto-generated)
+(function(){
+  const h=document.querySelector('script[type="application/x-hlp"][data-kind="hlp"]');
+  const c=document.querySelector('script[type="application/x-hlp"][data-kind="cnt"]');
+  if(h){ hlpBytes=fromB64(h.textContent); hlpName=h.dataset.name||'help.hlp'; if(c){ cntBytes=fromB64(c.textContent); cntName=c.dataset.name||''; } open(hlpBytes,cntBytes); }
+})();
+</script>
+</body>
+</html>

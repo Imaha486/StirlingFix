@@ -1,0 +1,19 @@
+ビルド方法 (MinGW-w64 32bit クロス / Linux例)
+----------------------------------------------
+# 1) winspool.drv (シム本体)
+i686-w64-mingw32-gcc -c thunks.S -o thunks.o
+i686-w64-mingw32-gcc -O2 -s -shared -o winspool.drv stirlingfix.c thunks.o exports.def \
+   -Wl,--enable-stdcall-fixup -lshlwapi -lshell32 -lgdi32 -luser32 -lkernel32 -limagehlp
+
+# 2) HlpViewer.html (viewer.src.html に hlp.js を埋め込む)
+python3 build.py          # -> HlpViewer.html
+
+# 3) Stirling.help.html (.hlp/.cnt 埋め込み単体版)
+node genstandalone.js Stirling.hlp Stirling.cnt Stirling.help.html
+
+thunks.S / exports.def は winspool.drv の全エクスポートを本物へ転送する
+ための自動生成物。別バージョンのWindowsに追従する場合は、本物の
+winspool.drv のエクスポート名から再生成してください。
+
+Windows上の MSYS2/MinGW でも同じコマンドでビルドできます
+(python3, node が必要なのは 2)3) のHTML生成のみ)。
