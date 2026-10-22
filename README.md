@@ -1,6 +1,6 @@
 # StirlingFix / HLP Viewer
 
-バイナリエディタ **Stirling 1.31 (DDS2)** を Windows 10 / 11 で快適に使うための一式です。本体 `Stirling.exe` は**一切書き換えず**、同じフォルダに DLL を置くだけで次の難点を解消します。
+バイナリエディタ **Stirling 1.31 (DDS2) https://www.vector.co.jp/soft/win95/util/se079072.html ** を Windows 10 / 11 で快適に使うための一式です。本体 `Stirling.exe` は**一切書き換えず**、同じフォルダに DLL を置くだけで次の難点を解消します。
 
 | 難点 | 対策 |
 | --- | --- |
